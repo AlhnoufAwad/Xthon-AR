@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+  <title>X-thon AR</title>
+
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body { overflow: hidden; font-family: 'Tajawal', sans-serif; }
+
+    /* ── شاشة البداية ── */
+    #splash {
+      position: fixed; inset: 0; z-index: 999;
+      background: #030d1e;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 24px;
+      text-align: center;
+    }
+
+    #splash h1 {
+      font-size: 2.2rem; font-weight: 900; color: #f97316;
+      margin-bottom: 10px; line-height: 1.2;
+    }
+
+    #splash p {
+      color: rgba(255,255,255,.65); font-size: .95rem;
+      line-height: 1.7; margin-bottom: 32px; max-width: 320px;
+    }
+
+    .start-btn {
+      padding: 16px 40px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: #fff; border: none; border-radius: 100px;
+      font-size: 1.1rem; font-weight: 700; cursor: pointer;
+      box-shadow: 0 0 30px rgba(249,115,22,.4);
+      margin-bottom: 28px;
+    }
+
+    .marker-hint {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 16px; padding: 18px 20px;
+      max-width: 320px; width: 100%;
+    }
+
+    .marker-hint p {
+      color: rgba(255,255,255,.5); font-size: .82rem;
+      margin-bottom: 12px;
+    }
+
+    .marker-hint img {
+      width: 120px; height: 120px;
+      border-radius: 10px; border: 2px solid rgba(249,115,22,.4);
+    }
+
+    /* ── HUD فوق الكاميرا ── */
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: none;
+      justify-content: space-between; align-items: center;
+      padding: 14px 18px;
+      background: linear-gradient(to bottom, rgba(3,13,30,.85), transparent);
+    }
+
+    #hud .logo { color: #f97316; font-weight: 900; font-size: 1.1rem; }
+
+    #hud .status {
+      display: flex; align-items: center; gap: 7px;
+      font-size: .78rem; color: rgba(255,255,255,.7);
+    }
+
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #fbbf24; box-shadow: 0 0 8px #fbbf24;
+      animation: blink 1.2s ease-in-out infinite;
+    }
+    .dot.found { background: #4ade80; box-shadow: 0 0 8px #4ade80; animation: none; }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* ── كارد التسجيل ── */
+    #card {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      display: none;
+      padding: 14px 14px 28px;
+      transform: translateY(100%);
+      transition: transform .45s cubic-bezier(.34,1.56,.64,1);
+    }
+    #card.show { transform: translateY(0); }
+
+    .card-inner {
+      background: rgba(3,13,30,.92);
+      border: 1px solid rgba(249,115,22,.25);
+      border-radius: 24px; padding: 20px;
+      backdrop-filter: blur(20px);
+    }
+
+    .card-inner h2 {
+      font-size: 1.1rem; font-weight: 900; color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-inner p {
+      font-size: .84rem; color: rgba(255,255,255,.6);
+      margin-bottom: 14px; line-height: 1.6;
+    }
+
+    .reg-btn {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: #fff; border: none; border-radius: 14px;
+      font-size: .95rem; font-weight: 700; cursor: pointer;
+    }
+
+    /* ── مؤشر البحث ── */
+    #scanner {
+      position: fixed; inset: 0; z-index: 50;
+      display: none;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+
+    .frame {
+      width: 220px; height: 220px; position: relative;
+    }
+
+    .frame i {
+      position: absolute; width: 30px; height: 30px;
+      border-color: #f97316; border-style: solid;
+    }
+    .frame i.tl { top:0; left:0;  border-width: 3px 0 0 3px; }
+    .frame i.tr { top:0; right:0; border-width: 3px 3px 0 0; }
+    .frame i.bl { bottom:0; left:0;  border-width: 0 0 3px 3px; }
+    .frame i.br { bottom:0; right:0; border-width: 0 3px 3px 0; }
+
+    .scan-line {
+      position: absolute; left:0; right:0; height: 2px;
+      background: linear-gradient(90deg, transparent, #f97316, transparent);
+      box-shadow: 0 0 10px #f97316;
+      animation: scan 2s ease-in-out infinite;
+    }
+    @keyframes scan { 0%{top:0} 50%{top:100%} 100%{top:0} }
+
+    #scanner p {
+      margin-top: 20px; color: rgba(255,255,255,.7);
+      font-size: .88rem;
+      text-shadow: 0 1px 6px rgba(0,0,0,.8);
+    }
+
+    /* ── Modal التسجيل ── */
+    #modal {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(3,13,30,.8); backdrop-filter: blur(8px);
+      display: none; align-items: flex-end; justify-content: center;
+    }
+    #modal.open { display: flex; }
+
+    .modal-box {
+      background: #0f2044;
+      border: 1px solid rgba(249,115,22,.2);
+      border-radius: 28px 28px 0 0;
+      padding: 28px 22px 36px;
+      width: 100%; max-width: 480px;
+    }
+
+    .modal-box h3 { font-size: 1.2rem; font-weight: 900; margin-bottom: 4px; }
+    .modal-box p { color: rgba(255,255,255,.55); font-size: .85rem; margin-bottom: 20px; }
+
+    .modal-box input {
+      width: 100%; padding: 12px 14px; margin-bottom: 12px;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px; color: #fff;
+      font-size: .9rem; outline: none;
+    }
+    .modal-box input::placeholder { color: rgba(255,255,255,.3); }
+    .modal-box input:focus { border-color: #f97316; }
+
+    .modal-box .submit {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: #fff; border: none; border-radius: 14px;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      margin-top: 4px;
+    }
+
+    .modal-box .close-btn {
+      float: left; background: none; border: none;
+      color: rgba(255,255,255,.4); font-size: 1.4rem; cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    /* A-Frame */
+    a-scene { position: fixed !important; inset: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ══ شاشة البداية ══ -->
+<div id="splash">
+  <h1>معرض X-thon AR</h1>
+  <p>وجّه كاميرا جوالك على ماركر Hiro لتشاهد الفيديو بتقنية الواقع المعزز</p>
+
+  <button class="start-btn" onclick="startAR()">
+    📷 تشغيل الكاميرا
+  </button>
+
+  <div class="marker-hint">
+    <p>اطبع أو اعرض هذا الماركر على شاشة أخرى:</p>
+    <img src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png"
+         alt="Hiro Marker"/>
+    <p style="margin-top:10px; margin-bottom:0; color:#f97316; font-size:.78rem">
+      ← اضغط عليه لتحميله
+    </p>
+  </div>
+</div>
+
+<!-- ══ HUD ══ -->
+<div id="hud">
+  <div class="logo">X-thon AR</div>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="statusTxt">جاري البحث…</span>
+  </div>
+</div>
+
+<!-- ══ مؤشر المسح ══ -->
+<div id="scanner">
+  <div class="frame">
+    <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+    <div class="scan-line"></div>
+  </div>
+  <p>وجّه الكاميرا على ماركر <strong>Hiro</strong></p>
+</div>
+
+<!-- ══ كارد التسجيل ══ -->
+<div id="card">
+  <div class="card-inner">
+    <h2>Welcome to X-thon Exhibition 🎉</h2>
+    <p>معرض X-thon الثاني — جامعة تبوك<br/>27 – 30 أبريل 2026</p>
+    <button class="reg-btn" onclick="openModal()">📝 سجّل الآن</button>
+  </div>
+</div>
+
+<!-- ══ مشهد AR ══ -->
+<a-scene
+  id="arScene"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false;"
+  renderer="antialias: true; logarithmicDepthBuffer: true;"
+  vr-mode-ui="enabled: false"
+  style="display:none"
+>
+  <a-assets>
+    <video id="arVideo"
+      src="video.mp4"
+      preload="auto"
+      loop
+      muted
+      playsinline
+      webkit-playsinline
+      crossorigin="anonymous">
+    </video>
+  </a-assets>
+
+  <a-marker
+    preset="hiro"
+    id="marker"
+    smooth="true"
+    smoothCount="5"
+    smoothTolerance="0.01"
+  >
+    <!-- الفيديو فوق الماركر مباشرة -->
+    <a-video
+      src="#arVideo"
+      width="1.6"
+      height="0.9"
+      position="0 0.01 0"
+      rotation="-90 0 0"
+    ></a-video>
+
+    <!-- إطار ضوئي حول الفيديو -->
+    <a-torus
+      color="#f97316"
+      radius="1.05"
+      radius-tubular="0.012"
+      position="0 0.01 0"
+      rotation="-90 0 0"
+      opacity="0.7"
+      animation="property:rotation; from:-90 0 0; to:-90 360 0; loop:true; dur:6000; easing:linear"
+    ></a-torus>
+
+    <!-- نص ثلاثي الأبعاد -->
+    <a-text
+      value="Welcome to X-thon"
+      align="center"
+      color="#f97316"
+      width="2.2"
+      position="0 0.8 0"
+      rotation="-90 0 0"
+      animation="property:position; from:0 0.6 0; to:0 0.85 0; loop:true; dir:alternate; dur:1800; easing:easeInOutSine"
+    ></a-text>
+
+    <!-- كرات ضوئية زخرفية -->
+    <a-sphere color="#f97316" radius="0.04" position=" 0.9 0.15  0.5"
+      animation="property:position; from:0.9 0.08 0.5; to:0.9 0.22 0.5; loop:true; dir:alternate; dur:1600; easing:easeInOutSine">
+    </a-sphere>
+    <a-sphere color="#00e5ff" radius="0.03" position="-0.9 0.15 -0.5"
+      animation="property:position; from:-0.9 0.08 -0.5; to:-0.9 0.22 -0.5; loop:true; dir:alternate; dur:2000; easing:easeInOutSine">
+    </a-sphere>
+    <a-sphere color="#a78bfa" radius="0.025" position="0.6 0.15 -0.8"
+      animation="property:position; from:0.6 0.08 -0.8; to:0.6 0.24 -0.8; loop:true; dir:alternate; dur:1400; easing:easeInOutSine">
+    </a-sphere>
+
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<!-- ══ Modal التسجيل ══ -->
+<div id="modal">
+  <div class="modal-box">
+    <button class="close-btn" onclick="closeModal()">✕</button>
+    <h3>التسجيل في X-thon</h3>
+    <p>أدخل بياناتك للمشاركة في المعرض</p>
+    <input id="rName"  type="text"  placeholder="الاسم الكامل"/>
+    <input id="rEmail" type="email" placeholder="البريد الجامعي"/>
+    <input id="rId"    type="text"  placeholder="الرقم الجامعي"/>
+    <button class="submit" onclick="submitForm()">تأكيد التسجيل ✓</button>
+  </div>
+</div>
+
+<script>
+const video  = document.getElementById('arVideo');
+const marker = document.getElementById('marker');
+const dot    = document.getElementById('dot');
+const stTxt  = document.getElementById('statusTxt');
+const card   = document.getElementById('card');
+const scanner= document.getElementById('scanner');
+
+let markerVisible = false;
+let lostTimer = null;
+
+function startAR() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('hud').style.display    = 'flex';
+  document.getElementById('arScene').style.display= 'block';
+  scanner.style.display = 'flex';
+  card.style.display    = 'block';
+}
+
+// أحداث الماركر
+marker.addEventListener('markerFound', () => {
+  clearTimeout(lostTimer);
+  markerVisible = true;
+
+  // تشغيل الفيديو
+  video.play().catch(() => {});
+
+  // تحديث HUD
+  dot.classList.add('found');
+  stTxt.textContent = 'تم الكشف! ✓';
+
+  // إخفاء مؤشر البحث
+  scanner.style.display = 'none';
+
+  // إظهار الكارد
+  card.classList.add('show');
+});
+
+marker.addEventListener('markerLost', () => {
+  lostTimer = setTimeout(() => {
+    markerVisible = false;
+    video.pause();
+
+    dot.classList.remove('found');
+    stTxt.textContent = 'جاري البحث…';
+
+    scanner.style.display = 'flex';
+
+    if (!document.getElementById('modal').classList.contains('open')) {
+      card.classList.remove('show');
+    }
+  }, 800);
+});
+
+function openModal()  { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+function submitForm() {
+  const name  = document.getElementById('rName').value.trim();
+  const email = document.getElementById('rEmail').value.trim();
+  const id    = document.getElementById('rId').value.trim();
+
+  if (!name || !email || !id) {
+    alert('يرجى تعبئة جميع الحقول');
+    return;
+  }
+
+  closeModal();
+  alert('✅ تم التسجيل بنجاح!\nسنتواصل معك على: ' + email);
+
+  document.getElementById('rName').value  = '';
+  document.getElementById('rEmail').value = '';
+  document.getElementById('rId').value    = '';
+}
+</script>
+
+</body>
+</html>
